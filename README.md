@@ -83,4 +83,4 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 Your Name - [zennergilbert@gmail.com]
 
-Project Link: [https://github.com/GilbertZennerDev/betterlift](https://www.google.com/search?q=https://github.com/GilbertZennerDev/betterlift)# BetterLift
+Project Link: [https://https://github.com/GilbertZennerDev/betterlift](https://https://github.com/GilbertZennerDev/betterlift)# BetterLift
