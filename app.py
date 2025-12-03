@@ -10,13 +10,15 @@ BetterLift just runs all its queue. Only when Queue empty, new Levels
 
 LiftManager keeps taking orders for new levels. Passes the entire queue on if BetterLift is finished with everything.
 '''
-import random as r
+
+import os
 import time as t
+import random as r
+import multiprocessing
 
 class BetterLift:
 	def __init__(self, conn, liftcount, traveltime):
 		self.conn = conn
-		self.queue = []
 		self.liftcount = liftcount
 		self.traveltime = traveltime
 		self.lifts = [{'current_level': 0, 'queue': []} for i in range(liftcount)]
@@ -30,8 +32,9 @@ class BetterLift:
 	def addLevel(self, level):
 		liftindex = self.getShortestQueue()
 		self.lifts[liftindex]['queue'].append(level)
-		self.lifts[liftindex]['queue'] = sorted(self.lifts[liftindex]['queue'])
-		#self.printLifts()
+		try: self.lifts[liftindex]['queue'] = sorted(self.lifts[liftindex]['queue'])
+		except: self.lifts[liftindex]['queue'] = []
+		
 	def addQueue(self, queue):
 		for level in queue: self.addLevel(level)
 	def getAllQueuesEmpty(self):
@@ -42,6 +45,7 @@ class BetterLift:
 		else: 
 			self.conn.send('give_queue');
 			queue = self.conn.recv()
+			print(f"Got Queue {queue}")
 			self.addQueue(queue)
 		
 	def runQueue(self):
@@ -49,48 +53,54 @@ class BetterLift:
 		while not self.getAllQueuesEmpty():
 			t.sleep(self.traveltime)
 			for i, lift in enumerate(self.lifts):
-				print("Doing Lift", i)
-				if not len(lift['queue']): continue
-				if lift['queue'][0] < lift['current_level']:
-					self.lifts[i]['current_level'] -= 1
-					print(f'Moving Lift #{i} down to {self.lifts[i]["current_level"]}')
-				elif lift['queue'][0] > lift['current_level']:
-					self.lifts[i]['current_level'] += 1
-					print(f'Moving Lift #{i} up to {self.lifts[i]["current_level"]}')
-				else:
-					arrivals += 1
-					self.lifts[i]['queue'].pop(0)
-					print(f'Lift #{i} has arrived at', self.lifts[i]['current_level'], f'arrival #{arrivals}')
+				#print("Doing Lift", i)
+				if not len(lift['queue']): return
+				try:
+					if lift['queue'][0] < lift['current_level']:
+						self.lifts[i]['current_level'] -= 1
+						print(f'Moving Lift #{i} down to {self.lifts[i]["current_level"]}')
+					elif lift['queue'][0] > lift['current_level']:
+						self.lifts[i]['current_level'] += 1
+						print(f'Moving Lift #{i} up to {self.lifts[i]["current_level"]}')
+					else:
+						arrivals += 1
+						self.lifts[i]['queue'].pop(0)
+						print(f'Lift #{i} has arrived at', self.lifts[i]['current_level'], f'arrival #{arrivals}')
+				except: continue
 
-import multiprocessing
-import os
-
-def childProcess(conn):
-	bl = BetterLift(conn, 4, 2)
-	while 1: bl.runLifts()
-	conn.close()
-
-def interface():
-	newlevel = input("Enter your target level:\n")
-	if newlevel != 'exit':
-		try: return (int(newlevel))
-		except Exception as e: print(e); interface()
-	#return 'exit'
-
-def LiftManager():
-	parent_conn, child_conn = multiprocessing.Pipe()
+class LiftManager:
+	def __init__(self, amount_lifts, travel_time):
+		self.travel_time = travel_time
+		self.amount_lifts = amount_lifts
 	
-	p = multiprocessing.Process(target=childProcess, args = (child_conn,))
-	p.start()
-	queue = []
-	while 1:
-		newlevel = interface()
-		if newlevel == 'exit': return
-		if newlevel not in queue: queue.append(newlevel)
-		child_state = parent_conn.recv()
-		if child_state == 'give_queue': parent_conn.send(queue); queue = []
-	p.join()
-	parent_conn.close()
+	def childProcess(self, conn):
+		bl = BetterLift(conn, self.amount_lifts, self.travel_time)
+		while 1: bl.runLifts()
+		conn.close()
 
-if __name__ == '__main__':
-	LiftManager()
+	def interface(self):
+		newlevel = input("Enter your target level:\n")
+		if newlevel != 'exit':
+			try: return (int(newlevel))
+			except Exception as e: print(e); self.interface()
+
+	def RunLiftManager(self):
+		parent_conn, child_conn = multiprocessing.Pipe()
+		
+		p = multiprocessing.Process(target=self.childProcess, args = (child_conn,))
+		p.start()
+		queue = []
+		while 1:
+			newlevel = self.interface()
+			if newlevel == 'exit': return
+			if newlevel not in queue: queue.append(newlevel)
+			child_state = parent_conn.recv()
+			if child_state == 'give_queue': parent_conn.send(queue); queue = []
+		p.join()
+		parent_conn.close()
+
+def main():
+	lm = LiftManager(1, 1)
+	lm.RunLiftManager()
+
+if __name__ == '__main__': main()
